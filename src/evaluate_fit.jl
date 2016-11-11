@@ -21,7 +21,7 @@ function objective(glrm::GLRM, X::Array{Float64,2}, Y::Array{Float64,2},
     end
     return err
 end
-function row_objective(glrm::AbstractGLRM, i::Int, x::AbstractArray, Y::Array{Float64,2} = glrm.Y;
+function row_objective(glrm::AbstractGLRM, i::Int, x::AbstractArray, W::Array{Float64,1}, Y::Array{Float64,2} = glrm.Y;
                    yidxs = get_yidxs(glrm.losses), # mapping from columns of A to columns of Y; by default, the identity
                    include_regularization=true)
     m,n = size(glrm.A)
@@ -34,9 +34,9 @@ function row_objective(glrm::AbstractGLRM, i::Int, x::AbstractArray, Y::Array{Fl
     if include_regularization
         err += evaluate(glrm.rx, x)
     end
-    return err
+    return err*W[i]
 end
-function col_objective(glrm::AbstractGLRM, j::Int, y::AbstractArray, X::Array{Float64,2} = glrm.X;
+function col_objective(glrm::AbstractGLRM, j::Int, y::AbstractArray, W::Array{Float64,1}, X::Array{Float64,2} = glrm.X;
                    include_regularization=true)
     m,n = size(glrm.A)
     sz = size(y)
@@ -44,7 +44,7 @@ function col_objective(glrm::AbstractGLRM, j::Int, y::AbstractArray, X::Array{Fl
     err = 0.0
     XY = X'*y
     for i in glrm.observed_examples[j]
-        err += evaluate(glrm.losses[j], XY[i,colind], glrm.A[i,j])
+        err += W[i]*evaluate(glrm.losses[j], XY[i,colind], glrm.A[i,j])
     end
     # add regularization penalty
     if include_regularization
