@@ -30,9 +30,15 @@ function fit!(glrm::GLRM, params::SparseProxGradParams;
 	ry = glrm.ry
 	# at any time, glrm.X and glrm.Y will be the best model yet found, while
 	# X and Y will be the working variables
-	X = copy(glrm.X); Y = copy(glrm.Y)
+	X = copy(glrm.X); Y = copy(glrm.Y); W = copy(glrm.W);
 	k = glrm.k
-
+    #####################################################
+    # add h: sparsity of W
+    h = glrm.h
+    τ = 1
+    lb = 0.0
+    ub = 1.0
+    #####################################################
 	m,n = size(A)
 
     # check that we didn't initialize to zero (otherwise we will never move)
@@ -51,7 +57,10 @@ function fit!(glrm::GLRM, params::SparseProxGradParams;
     t = time()
     steps_in_a_row = 0
     g = zeros(k)
-
+    ######################################################
+    # gradient wrt element of W
+    gw = zeros(m)
+    ######################################################
     # cache views
     ve = ContiguousView{Float64,1,Array{Float64,2}}[view(X,:,e) for e=1:m]
     vf = ContiguousView{Float64,1,Array{Float64,2}}[view(Y,:,f) for f=1:n]
@@ -67,7 +76,7 @@ function fit!(glrm::GLRM, params::SparseProxGradParams;
                 # but we have no function dLⱼ/dXᵢ, only dLⱼ/d(XᵢYⱼ) aka dLⱼ/du
                 # by chain rule, the result is: Σⱼ (dLⱼ(XᵢYⱼ)/du * Yⱼ), where dLⱼ/du is our grad() function
                 # our estimate for A[e,f] is given by dot(ve[e],vf[f])
-                axpy!(grad(losses[f],dot(ve[e],vf[f]),A[e,f]), vf[f], g)
+                axpy!(W[e]*grad(losses[f],dot(ve[e],vf[f]),A[e,f]), vf[f], g)
             end
             # take a proximal gradient step
             l = length(glrm.observed_features[e]) + 1
@@ -87,7 +96,7 @@ function fit!(glrm::GLRM, params::SparseProxGradParams;
             for e in glrm.observed_examples[f]
                 # but we have no function dLⱼ/dYⱼ, only dLⱼ/d(XᵢYⱼ) aka dLⱼ/du
                 # by chain rule, the result is: Σⱼ dLⱼ(XᵢYⱼ)/du * Xᵢ, where dLⱼ/du is our grad() function
-            	axpy!(grad(losses[f],dot(ve[e],vf[f]),A[e,f]), ve[e], g)
+            	axpy!(W[e]*grad(losses[f],dot(ve[e],vf[f]),A[e,f]), ve[e], g)
             end
             # take a proximal gradient step
             l = length(glrm.observed_examples[f]) + 1
@@ -98,13 +107,40 @@ function fit!(glrm::GLRM, params::SparseProxGradParams;
             prox!(ry[f],vf[f],alpha/l)
         end
         end
-# STEP 3: Check objective
-        obj = objective(glrm, X, Y; sparse=true) 
+        ######################################################
+# STEP 3: W Update
+        # update τ
+        τ = 1/vecnorm(Y,2)^2;
+        # Since X,Y are fixed, gw won't change
+        # params.inner_iter times, should compute gradient out side the inner loop
+        for e=1:m # for every element of W, W[e]
+            scale!(gw, 0) # reset gradient to 0
+            # compute gradient of L with respect to Wᵢ as follows:
+            # ∇{Wᵢ}L =  Wᵢ * Σⱼ dLⱼ(XᵢYⱼ)/dWᵢ
+            for f in glrm.observed_features[e]
+                # but we have no function dLⱼ/dWᵢ, only dLⱼ/d(XᵢYⱼ) aka dLⱼ/du
+                # the result is: Σⱼ (dLⱼ(XᵢYⱼ)/du), where dLⱼ/du is our grad() function
+                curgrad = evaluate(losses[f], dot(ve[e],vf[f]), A[e,f])
+                # axpy!(curgrad, 1.0, gw)
+                # here curgrad is a number we need to update corresponding element of gw
+                gw[e] += curgrad;
+            end
+        end
+        for inneri=1:i
+        # Afer update gradient we could implement one gradient step
+        ## gradient step: Wᵢ += -τ * ∇{Wᵢ}L
+        axpy!(-τ,gw,W);
+        ## prox step: W = prox_rw(W, lb, ub, glrm.h)
+        prox!(W,lb,ub,h);
+        end # inner iteration
+        ######################################################
+# STEP 4: Check objective
+        obj = objective(glrm, X, Y, W; sparse=true) 
         # record the best X and Y yet found
         if obj < ch.objective[end]
             t = time() - t
             update_ch!(ch, t, obj)
-            copy!(glrm.X, X); copy!(glrm.Y, Y) # save new best X and Y
+            copy!(glrm.X, X); copy!(glrm.Y, Y); copy!(glrm.W, W); # save new best X and Y
             alpha = alpha * 1.05
             steps_in_a_row = max(1, steps_in_a_row+1)
             t = time()
@@ -112,19 +148,34 @@ function fit!(glrm::GLRM, params::SparseProxGradParams;
             # if the objective went up, reduce the step size, and undo the step
             alpha = alpha / max(1.5, -steps_in_a_row)
             if verbose println("obj went up to $obj; reducing step size to $alpha") end
-            copy!(X, glrm.X); copy!(Y, glrm.Y) # revert back to last X and Y
+            copy!(X, glrm.X); copy!(Y, glrm.Y); copy!(W, glrm.W); # revert back to last X and Y
             steps_in_a_row = min(0, steps_in_a_row-1)
         end
-# STEP 4: Check stopping criterion
+# STEP 5: Check stopping criterion
         if i>10 && (steps_in_a_row > 3 && ch.objective[end-1] - obj < tol) || alpha <= params.min_stepsize
             break
         end
-        if verbose && i%10==0 
+        if verbose && i%1==0 
             println("Iteration $i: objective value = $(ch.objective[end])") 
         end
     end
     t = time() - t
     update_ch!(ch, t, ch.objective[end])
 
-    return glrm.X, glrm.Y, ch
+    return glrm.X, glrm.Y, glrm.W, ch
 end
+######################################################
+function prox!(W0, lb, ub, h)
+    a = -1.5+minimum(W0);
+    b = maximum(W0);
+    f(λ) = sum(max(min(W0 - λ, ub), lb)) - h;
+    # print([a,b],[f(a),f(b)],"\n");
+    λ_opt = fzero(f, [a,b]);
+    # doing the threshold in [lb,ub]
+    for i = 1:length(W0)
+        W0[i] -= λ_opt;
+        W0[i] > ub ? W0[i] = ub :
+        W0[i] < lb ? W0[i] = lb : nothing;
+    end
+end
+######################################################

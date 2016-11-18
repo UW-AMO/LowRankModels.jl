@@ -83,7 +83,7 @@ function fit!(glrm::GLRM, params::ProxGradParams;
 
     # alternating updates of X and Y
     if verbose println("Fitting GLRM") end
-    update_ch!(ch, 0, objective(glrm, X, Y, XY, yidxs=yidxs))
+    update_ch!(ch, 0, objective(glrm, X, Y, XY, W, yidxs=yidxs))
     t = time()
     steps_in_a_row = 0
     # gradient wrt columns of X
@@ -254,7 +254,7 @@ function fit!(glrm::GLRM, params::ProxGradParams;
             for f in glrm.observed_features[e]
                 # but we have no function dLⱼ/dWᵢ, only dLⱼ/d(XᵢYⱼ) aka dLⱼ/du
                 # the result is: Σⱼ (dLⱼ(XᵢYⱼ)/du), where dLⱼ/du is our grad() function
-                curgrad = grad(losses[f],XY[e,yidxs[f]],A[e,f])
+                curgrad = evaluate(losses[f], XY[e,yidxs[f]], A[e,f])
                 # axpy!(curgrad, 1.0, gw)
                 # here curgrad is a number we need to update corresponding element of gw
                 gw[e] += curgrad;
@@ -284,7 +284,7 @@ function fit!(glrm::GLRM, params::ProxGradParams;
         if i>10 && (obj_decrease < scaled_abs_tol || obj_decrease/obj < params.rel_tol)
             break
         end
-        if verbose && i%10==0
+        if verbose && i%1==0
             println("Iteration $i: objective value = $(ch.objective[end])")
         end
     end

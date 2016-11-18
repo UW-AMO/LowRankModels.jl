@@ -2,17 +2,18 @@ export objective, error_metric, impute
 
 ### OBJECTIVE FUNCTION EVALUATION FOR MPCA
 function objective(glrm::GLRM, X::Array{Float64,2}, Y::Array{Float64,2}, 
-                   XY::Array{Float64,2}; 
+                   XY::Array{Float64,2},W::Array{Float64,1}; 
                    yidxs = get_yidxs(glrm.losses), # mapping from columns of A to columns of Y; by default, the identity
                    include_regularization=true)
     m,n = size(glrm.A)
     @assert(size(XY)==(m,yidxs[end][end]))
     @assert(size(Y)==(glrm.k,yidxs[end][end]))
     @assert(size(X)==(glrm.k,m))
+    @assert(size(W)==(m,))
     err = 0.0
     for j=1:n
         for i in glrm.observed_examples[j]
-            err += evaluate(glrm.losses[j], XY[i,yidxs[j]], glrm.A[i,j])
+            err += W[i]*evaluate(glrm.losses[j], XY[i,yidxs[j]], glrm.A[i,j])
         end
     end
     # add regularization penalty
@@ -53,7 +54,7 @@ function col_objective(glrm::AbstractGLRM, j::Int, y::AbstractArray, W::Array{Fl
     return err
 end
 # The user can also pass in X and Y and `objective` will compute XY for them
-function objective(glrm::GLRM, X::Array{Float64,2}, Y::Array{Float64,2};
+function objective(glrm::GLRM, X::Array{Float64,2}, Y::Array{Float64,2}, W::Array{Float64,1};
                    sparse=false, include_regularization=true, 
                    yidxs = get_yidxs(glrm.losses), kwargs...)
     @assert(size(Y)==(glrm.k,yidxs[end][end]))
@@ -65,7 +66,7 @@ function objective(glrm::GLRM, X::Array{Float64,2}, Y::Array{Float64,2};
         err = 0.0
         for j=1:n
             for i in glrm.observed_examples[j]
-                err += evaluate(glrm.losses[j], dot(X[:,i],Y[:,yidxs[j]]), glrm.A[i,j])
+                err += W[i]*evaluate(glrm.losses[j], dot(X[:,i],Y[:,yidxs[j]]), glrm.A[i,j])
             end
         end
         if include_regularization
@@ -75,11 +76,11 @@ function objective(glrm::GLRM, X::Array{Float64,2}, Y::Array{Float64,2};
     else
         # dense calculation variant (calculate XY up front)
         gemm!('T','N',1.0,X,Y,0.0,XY)
-        return objective(glrm, X, Y, XY; include_regularization=include_regularization, yidxs = yidxs, kwargs...)
+        return objective(glrm, X, Y, XY, W; include_regularization=include_regularization, yidxs = yidxs, kwargs...)
     end
 end
 # Or just the GLRM and `objective` will use glrm.X and .Y
-objective(glrm::GLRM; kwargs...) = objective(glrm, glrm.X, glrm.Y; kwargs...)
+objective(glrm::GLRM; kwargs...) = objective(glrm, glrm.X, glrm.Y, glrm.W; kwargs...)
 
 # For shared arrays
 # TODO: compute objective in parallel
