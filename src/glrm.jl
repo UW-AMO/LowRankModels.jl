@@ -16,6 +16,7 @@ type GLRM<:AbstractGLRM
     rx::Regularizer              # The regularization to be applied to each row of Xᵀ (column of X)
     ry::Array{Regularizer,1}     # Array of regularizers to be applied to each column of Y
     k::Int                       # Desired rank 
+    h::Int                       # Trimming parameter
     observed_features::ObsArray  # for each example, an array telling which features were observed
     observed_examples::ObsArray  # for each feature, an array telling in which examples the feature was observed  
     X::AbstractArray{Float64,2}  # Representation of data in low-rank space. A ≈ X'Y
@@ -29,7 +30,7 @@ end
 # * providing argument `obs` overwrites arguments `observed_features` and `observed_examples`
 # * offset and scale are *false* by default to avoid unexpected behavior
 # * convenience methods for calling are defined in utilities/conveniencemethods.jl
-function GLRM(A, losses::Array, rx::Regularizer, ry::Array, k::Int; 
+function GLRM(A, losses::Array, rx::Regularizer, ry::Array, k::Int, h::Int; 
 # the following tighter definition fails when you form an array of a tighter subtype than the abstract type, eg Array{QuadLoss,1}
 # function GLRM(A::AbstractArray, losses::Array{Loss,1}, rx::Regularizer, ry::Array{Regularizer,1}, k::Int; 
               X = randn(k,size(A,1)), Y = randn(k,embedding_dim(losses)),
@@ -44,7 +45,8 @@ function GLRM(A, losses::Array, rx::Regularizer, ry::Array, k::Int;
     if length(ry)!=n error("There must be either one Y regularizer or as many Y regularizers as there are columns in the data matrix") end
     if size(X)!=(k,m) error("X must be of size (k,m) where m is the number of rows in the data matrix. This is the transpose of the standard notation used in the paper, but it makes for better memory management. \nsize(X) = $(size(X)), size(A) = $(size(A)), k = $k") end
     if size(Y)!=(k,sum(map(embedding_dim, losses))) error("Y must be of size (k,d) where d is the sum of the embedding dimensions of all the losses. \n(1 for real-valued losses, and the number of categories for categorical losses).") end
-    
+    if h > m h=m end
+    if h <=0 error("Trimming parameter could not be nonpositive number.\n h = $h\n") end
     # Determine observed entries of data
     if obs==nothing && sparse_na && isa(A,SparseMatrixCSC)
         I,J = findn(A) # observed indices (vectors)
@@ -52,10 +54,10 @@ function GLRM(A, losses::Array, rx::Regularizer, ry::Array, k::Int;
     end
     if obs==nothing # if no specified array of tuples, use what was explicitly passed in or the defaults (all)
         # println("no obs given, using observed_features and observed_examples")
-        glrm = GLRM(A,losses,rx,ry,k, observed_features, observed_examples, X,Y)
+        glrm = GLRM(A,losses,rx,ry,k,h, observed_features, observed_examples, X,Y)
     else # otherwise unpack the tuple list into arrays
         # println("unpacking obs into array")
-        glrm = GLRM(A,losses,rx,ry,k, sort_observations(obs,size(A)...)..., X,Y)
+        glrm = GLRM(A,losses,rx,ry,k,h, sort_observations(obs,size(A)...)..., X,Y)
     end
 
     # check to make sure X is properly oriented

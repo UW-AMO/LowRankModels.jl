@@ -50,8 +50,8 @@ function fit!(glrm::GLRM, params::ProxGradParams;
     #####################################################
     # add h: sparsity of W
     # TODO: add h in the parameter set of glrm
-    # h = glrm.h;
-    h = floor(Int64,0.5*m); # temporary when we not defind h in glrm data structure
+    h = glrm.h;
+    # h = floor(Int64,0.5*m); # temporary when we not defind h in glrm data structure
     # define W and its box boundary
     W = h/m*ones(m)   #-CHANGED １. check h<=m or doesn't matter?
     τ = 1

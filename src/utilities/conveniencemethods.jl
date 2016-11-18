@@ -54,11 +54,11 @@ copy(d::Domain) = d
 fillcopies(foo, n::Int; arraytype=typeof(foo)) = arraytype[copy(foo) for i=1:n]
 
 # singleton loss:
-GLRM(A, loss::Loss, rx::Regularizer, ry::Regularizer, k::Int; kwargs...) = 
-    GLRM(A, fillcopies(loss, size(A, 2)), rx, fillcopies(ry, size(A, 2), arraytype=Regularizer), k; kwargs...)
-GLRM(A, loss::Loss, rx::Regularizer, ry::Array, k::Int; kwargs...) = 
-    GLRM(A, fillcopies(loss, size(A, 2), arraytype=Loss), rx, ry, k; kwargs...)
+GLRM(A, loss::Loss, rx::Regularizer, ry::Regularizer, k::Int, h::Int; kwargs...) = 
+    GLRM(A, fillcopies(loss, size(A, 2)), rx, fillcopies(ry, size(A, 2), arraytype=Regularizer), k, h; kwargs...)
+GLRM(A, loss::Loss, rx::Regularizer, ry::Array, k::Int, h::Int; kwargs...) = 
+    GLRM(A, fillcopies(loss, size(A, 2), arraytype=Loss), rx, ry, k, h; kwargs...)
 
 # singleton regularizer on y:
-GLRM(A, losses::Array, rx::Regularizer, ry::Regularizer, k::Int; kwargs...) = 
-    GLRM(A, losses, rx, fillcopies(ry, size(A, 2), arraytype=Regularizer), k::Int; kwargs...)
+GLRM(A, losses::Array, rx::Regularizer, ry::Regularizer, k::Int, h::Int; kwargs...) = 
+    GLRM(A, losses, rx, fillcopies(ry, size(A, 2), arraytype=Regularizer), k::Int, h::Int; kwargs...)
