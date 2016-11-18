@@ -40,7 +40,7 @@ function fit!(glrm::GLRM, params::ProxGradParams;
     losses = glrm.losses
     rx = glrm.rx
     ry = glrm.ry
-    X = glrm.X; Y = glrm.Y
+    X = glrm.X; Y = glrm.Y; W = glrm.W;
     # check that we didn't initialize to zero (otherwise we will never move)
     if vecnorm(Y) == 0
         Y = .1*randn(k,d)
@@ -53,7 +53,7 @@ function fit!(glrm::GLRM, params::ProxGradParams;
     h = glrm.h;
     # h = floor(Int64,0.5*m); # temporary when we not defind h in glrm data structure
     # define W and its box boundary
-    W = h/m*ones(m)   #-CHANGED １. check h<=m or doesn't matter?
+    # W = h/m*ones(m)   #-CHANGED １. check h<=m or doesn't matter?
     τ = 1
     lb = 0.0
     ub = 1.0
@@ -289,7 +289,7 @@ function fit!(glrm::GLRM, params::ProxGradParams;
         end
     end
 
-    return glrm.X, glrm.Y, ch
+    return glrm.X, glrm.Y, glrm.W, ch
 end
 ######################################################
 function prox!(W0, lb, ub, h)
