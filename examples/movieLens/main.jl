@@ -35,12 +35,14 @@ R_tr   = sparse(uid_tr,mid_tr,rat_tr)   # training rating matrix
 #--------------------------------------------------------------------
 println("-----------------------train data------------------------")
 m,n  = size(R_tr)
-k    = 5                            # low-rank
-h    = m >> 1                       # trimming constant
+k    = 10                           # low-rank
+h    = floor(Int64,m)           # trimming constant
+@show(m,n,k,h)
 loss = QuadLoss()
 reg  = ZeroReg()                    # using zeroReg for experiment
 glrm = GLRM(R_tr,loss,reg,reg,k,h)  # trim half the data
-U, M, W, ch = fit!(glrm, SparseProxGradParams())
+parm = SparseProxGradParams(1.0,100,1,1.0e-5,1.0e-3)
+U, M, W, ch = fit!(glrm, parm)
 #--------------------------------------------------------------------
 # Test Data
 #--------------------------------------------------------------------
@@ -55,12 +57,13 @@ for ind ∈ ind_te
 end
 mse /= length(ind_te)
 @printf("MSE: %1.5e\n",mse)
+@show(sum(W))
 #--------------------------------------------------------------------
 # Plot W
 #--------------------------------------------------------------------
 # plot trimming vector
-# using PyPlot
-# plot(1:m,W,".b")
-# title("Trimming Weight Matrix")
-# savefig("trim_w.eps")
-# println("save trim_w.eps")
+using PyPlot
+plot(1:m,W,".b")
+title("Trimming Weight Matrix")
+savefig("trim_w.eps")
+println("save trim_w.eps")

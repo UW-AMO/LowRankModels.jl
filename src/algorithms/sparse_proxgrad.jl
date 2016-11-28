@@ -113,8 +113,8 @@ function fit!(glrm::GLRM, params::SparseProxGradParams;
         τ = 1/vecnorm(Y,2)^2;
         # Since X,Y are fixed, gw won't change
         # params.inner_iter times, should compute gradient out side the inner loop
+        scale!(gw, 0) # reset gradient to 0
         for e=1:m # for every element of W, W[e]
-            scale!(gw, 0) # reset gradient to 0
             # compute gradient of L with respect to Wᵢ as follows:
             # ∇{Wᵢ}L =  Wᵢ * Σⱼ dLⱼ(XᵢYⱼ)/dWᵢ
             for f in glrm.observed_features[e]
@@ -126,7 +126,7 @@ function fit!(glrm::GLRM, params::SparseProxGradParams;
                 gw[e] += curgrad;
             end
         end
-        for inneri=1:i
+        for inneri=1:params.inner_iter
         # Afer update gradient we could implement one gradient step
         ## gradient step: Wᵢ += -τ * ∇{Wᵢ}L
         axpy!(-τ,gw,W);
@@ -165,17 +165,17 @@ function fit!(glrm::GLRM, params::SparseProxGradParams;
     return glrm.X, glrm.Y, glrm.W, ch
 end
 ######################################################
-function prox!(W0, lb, ub, h)
-    a = -1.5+minimum(W0);
-    b = maximum(W0);
-    f(λ) = sum(max(min(W0 - λ, ub), lb)) - h;
-    # print([a,b],[f(a),f(b)],"\n");
-    λ_opt = fzero(f, [a,b]);
-    # doing the threshold in [lb,ub]
-    for i = 1:length(W0)
-        W0[i] -= λ_opt;
-        W0[i] > ub ? W0[i] = ub :
-        W0[i] < lb ? W0[i] = lb : nothing;
-    end
-end
+# function prox!(W0, lb, ub, h)
+#     a = -1.5+minimum(W0);
+#     b = maximum(W0);
+#     f(λ) = sum(max(min(W0 - λ, ub), lb)) - h;
+#     # print([a,b],[f(a),f(b)],"\n");
+#     λ_opt = fzero(f, [a,b]);
+#     # doing the threshold in [lb,ub]
+#     for i = 1:length(W0)
+#         W0[i] -= λ_opt;
+#         W0[i] > ub ? W0[i] = ub :
+#         W0[i] < lb ? W0[i] = lb : nothing;
+#     end
+# end
 ######################################################

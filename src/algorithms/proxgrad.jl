@@ -244,11 +244,11 @@ function fit!(glrm::GLRM, params::ProxGradParams;
         ######################################################
 # STEP 3: W Update
         # update τ
-        τ = 1/vecnorm(Y,2)^2;
+        τ = 1.0/vecnorm(Y,2)^2.;
         # Since X,Y are fixed, gw won't change
         # params.inner_iter times, should compute gradient out side the inner loop
+        scale!(gw, 0) # reset gradient to 0
         for e=1:m # for every element of W, W[e]
-            scale!(gw, 0) # reset gradient to 0
             # compute gradient of L with respect to Wᵢ as follows:
             # ∇{Wᵢ}L =  Wᵢ * Σⱼ dLⱼ(XᵢYⱼ)/dWᵢ
             for f in glrm.observed_features[e]
@@ -260,12 +260,13 @@ function fit!(glrm::GLRM, params::ProxGradParams;
                 gw[e] += curgrad;
             end
         end
-        for inneri=1:i
+        for inneri=1:params.inner_iter
         # Afer update gradient we could implement one gradient step
         ## gradient step: Wᵢ += -τ * ∇{Wᵢ}L
         axpy!(-τ,gw,W);
         ## prox step: W = prox_rw(W, lb, ub, glrm.h)
         prox!(W,lb,ub,h);
+        @show(W)
         end # inner iteration
         ######################################################
 # STEP 4: Record objective
